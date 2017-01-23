@@ -1,0 +1,15 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:five="http://namespaces.zope.org/five"
+    i18n_domain="pcp.spmtsync">    
+
+  <!--five:registerPackage package="." initialize=".initialize" /-->
+
+  <!-- Declare marker interface, so that it is available in ZMI -->
+  <interface interface="pcp.spmtsync.interfaces.IPortfolioRoot" />
+
+  
+  <!-- Include the sub-packages that use their own configure.zcml files. -->
+  <include package=".browser" />
+
+</configure>
