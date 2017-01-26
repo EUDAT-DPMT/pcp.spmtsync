@@ -4,10 +4,10 @@
     i18n:domain="plone">
 
     <record name="pcp.spmtsync.baseurl">
-        <field type="plone.registry.field.URI">
-            <title>SPMT's base URL</title>
+        <field type="plone.registry.field.TextLine">
+            <title>SPMT's base</title>
         </field>
-        <value>https://sp.eudat.eu</value>
+        <value>sp.eudat.eu</value>
     </record>
 
     <record name="pcp.spmtsync.portfoliourl">

@@ -5,5 +5,12 @@
 
   <!--browser view registrations go here-->
 
+  <browser:page
+	for="pcp.spmtsync.interfaces.IPortfolioRoot"
+	name="sync"
+	class="pcp.spmtsync.browser.sync.SPMTSyncView"
+	attribute="sync"
+	permission="zope2.View"
+        />
 
 </configure>
