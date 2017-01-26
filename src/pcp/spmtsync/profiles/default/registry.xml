@@ -1,0 +1,20 @@
+<?xml version="1.0" ?>
+<registry
+    xmlns:i18n="http://xml.zope.org/namespaces/i18n"
+    i18n:domain="plone">
+
+    <record name="pcp.spmtsync.baseurl">
+        <field type="plone.registry.field.URI">
+            <title>SPMT's base URL</title>
+        </field>
+        <value>https://sp.eudat.eu</value>
+    </record>
+
+    <record name="pcp.spmtsync.portfoliourl">
+        <field type="plone.registry.field.URI">
+            <title>URL of service portfolio listing</title>
+        </field>
+        <value>https://sp.eudat.eu/api/v1/portfolio/services</value>
+    </record>
+
+</registry>
