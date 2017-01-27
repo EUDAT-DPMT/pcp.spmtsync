@@ -1,4 +1,6 @@
 import logging
+import requests
+import json
 
 from zope.component import getUtility
 from plone.registry. interfaces import IRegistry
@@ -47,3 +49,22 @@ def getServiceData():
     if source is not None:
         return source['services']
     return None
+
+
+def email2puid(site):
+    """
+    Return a mapping email -> UID for all exisitng Person objects.
+    If an email address occurs several times only the first hit is
+    recorded and a warning is logged.
+    """
+    logger = logging.getLogger('contacts')
+    result = {}
+    for person in site.people.contentValues():
+        email = person.getEmail().lower()
+        uid =  person.UID()
+        if email and email in result.keys():
+            logger.warning("'%s' already found - skipping" % email)
+            continue
+        logger.debug("Mapping '%s' to '%s'" % (email, uid))
+        result[email] = uid
+    return result.copy()

@@ -11,6 +11,8 @@ from pcp.spmtsync.browser import config
 
 def preparedata(values, site, additional_org, email2puid, logger):
 
+    logger.debug(values)
+
     fields = {}
     for k,v in values.items():
         fields[k] = v
@@ -30,18 +32,20 @@ def preparedata(values, site, additional_org, email2puid, logger):
     fields['service_complete_link'] = scl
     fields['identifiers'] = identifiers
     # link contacts
-    contact_url = fields['contact_information']['links']['self']
-    # first map exceptions
-    contact_data = utils.getDataFromSPMT(contact_url)
-    contact_email = contact_data['external_contact_information']['email']
-    email = config.creg2dp_email.get(contact_email,contact_email)
-    # then look up corresponding UID
-    contact_uid = email2puid.get(email, None)
-    if contact_uid is None:
-        logger.warning("'%s' not found - no contact set for '%s'" \
-                       % (contact_email, title))
-    else:
-        fields['contact'] = contact_uid
+    contact_info =  fields['contact_information']
+    if contact_info is not None:
+        contact_url = fields['contact_information']['links']['self']
+        # first map exceptions
+        contact_data = utils.getDataFromSPMT(contact_url)
+        contact_email = contact_data['external_contact_information']['email']
+        email = config.creg2dp_email.get(contact_email,contact_email)
+        # then look up corresponding UID
+        contact_uid = email2puid.get(email, None)
+        if contact_uid is None:
+            logger.warning("'%s' not found - no contact set for '%s'" \
+                           % (contact_email, title))
+        else:
+            fields['contact'] = contact_uid
     # same for the service owner
     owner_email = fields['service_owner']['email']
     o_email = config.creg2dp_email.get(owner_email,owner_email)
@@ -207,6 +211,8 @@ class SPMTSyncView(BrowserView):
         for entry in spmt_services:
             shortname = entry['name']
             id = cleanId(shortname)
+            if id == 'test':
+                continue
             if id is None:
                 logger.warning("Couldn't generate id for ", values)
                 continue
@@ -216,7 +222,7 @@ class SPMTSyncView(BrowserView):
 
             # retrieve data to extended rather than overwrite
             additional = targetfolder[id].getAdditional()
-            data = preparedata(entry, site, additional, email2puid)
+            data = preparedata(entry, site, additional, email2puid, logger)
             logger.debug(data)
             targetfolder[id].edit(**data)
             targetfolder[id].reindexObject()
@@ -227,7 +233,9 @@ class SPMTSyncView(BrowserView):
         # second loop so dependencies in 'details' can be resolved 
         for entry in spmt_services:
             shortname = entry['name']
-            id = cleanId(shortname)            
+            id = cleanId(shortname)
+            if id == 'test':
+                continue
             try:
                 data = entry['service_details_list']['service_details'][0]  
                 # we assume there is at most one
