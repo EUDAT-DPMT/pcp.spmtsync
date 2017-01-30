@@ -94,10 +94,15 @@ def addImplementationDetails(site, impl, data, logger):
     logger.debug("addImplemenationDetails called with this data: '%s'" % data)
     id = cleanId('version-' + data['version'])
     if id not in impl.contentIds():
-        impl.invokeFactory('ServiceComponentImplementationDetails', id)
+        details = plone.api.content.create(
+                portal_type='ServiceComponentImplementationDetails',
+                id=id,
+                container=impl)
         logger.info("Adding service component implementation details '%s' to '%s'" % (
             id, impl.Title()))
-    details = impl[id]
+    else:
+        details = impl[id]
+
     data['title'] = 'Version ' + data['version']
     data['description'] = 'Implementation details of ' + \
         impl.Title() + ': version ' + data['version']
@@ -111,33 +116,54 @@ def addImplementationDetails(site, impl, data, logger):
         data['configuration_parameters'] = keys
     else:
         data['configuration_parameters'] = []
-    details.edit(**data)
-    details.reindexObject()
-    site.portal_repository.save(obj=details,
-                                comment="Synchronization from SPMT")
-    logger.info("Updated '%s': implementation of '%s'" % (
-        data['title'], impl.Title()))
 
+
+    last_saved_data = getattr(details, '_last_saved_data', None)
+    if last_saved_data != data:
+        details.edit(**data)
+        details.reindexObject()
+        details._last_saved_data = data
+        site.portal_repository.save(obj=details,
+                                    comment="Synchronization from SPMT")
+        logger.info("Updated '%s': implementation of '%s'" % (
+            data['title'], impl.Title()))
+    else:
+        logger.info("No need to update '%s': implementation of '%s'" % (
+            data['title'], impl.Title()))
 
 def addImplementation(site, component, data, logger):
     """Adding an implementation to a service component"""
     logger.debug("addImplemenation called with this data: '%s'" % data)
     id = cleanId(data['name'])
     if id not in component.contentIds():
-        component.invokeFactory('ServiceComponentImplementation', id)
+        implementation = plone.api.content.create(
+                portal_type='ServiceComponentImplementation',
+                container=component,
+                id=id)
         logger.info("Adding service component implementation '%s' to '%s'" % (
             id, component.Title()))
-    implementation = component[id]
+    else:
+        implementation = component[id]
+
     data['title'] = component.Title() + ' implementation: ' + data['name']
     data['identifiers'] = [{'type': 'spmt_uid',
                             'value': data['uuid']},
                            ]
-    implementation.edit(**data)
-    implementation.reindexObject()
-    site.portal_repository.save(obj=implementation,
-                                comment="Synchronization from SPMT")
-    logger.info("Updated '%s': implementation of '%s'" % (
-        data['name'], component.Title()))
+
+    last_saved_data = getattr(implementation, '_last_saved_data', None)
+    if last_saved_data != data:
+        implementation.edit(**data)
+        implementation.reindexObject()
+        implementation.last_saved_data = data
+        site.portal_repository.save(obj=implementation,
+                                    comment="Synchronization from SPMT")
+        logger.info("Updated '%s': implementation of '%s'" % (
+            data['name'], component.Title()))
+    else:
+        logger.info("No need to update'%s': implementation of '%s'" % (
+            data['name'], component.Title()))
+
+
     details_data = utils.getDataFromSPMT(
         data['component_implementation_details_link']['related']['href'])
     details = details_data['service_component_implementation_details_list'][
@@ -154,20 +180,32 @@ def addComponent(service, site, data, logger):
     logger.debug("addComponent called with this data: '%s'" % data)
     id = cleanId(data['name'])
     if id not in service.contentIds():
-        service.invokeFactory('ServiceComponent', id)
+        component = plone.api.content.create(
+                container=service,
+                id=id,
+                portal_type='ServiceComponent')
         logger.info("Adding service component '%s' to '%s'" %
                     (id, service.Title()))
-    component = service[id]
+    else:
+        component = service[id]
     data['title'] = "Service component '%s'" % data['name']
     data['identifiers'] = [{'type': 'spmt_uid',
                             'value': data['uuid']},
                            ]
-    component.edit(**data)
-    component.reindexObject()
-    site.portal_repository.save(obj=component,
-                                comment="Synchronization from SPMT")
-    logger.info("Updated '%s' component of '%s'" %
-                (data['name'], service.Title()))
+
+    last_saved_data = getattr(component, '_last_saved_data', None)
+    if last_saved_data != data:
+        component.edit(**data)
+        component.reindexObject()
+        component._last_saved_data = data
+        site.portal_repository.save(obj=component,
+                                    comment="Synchronization from SPMT")
+        logger.info("Updated '%s' component of '%s'" %
+                    (data['name'], service.Title()))
+    else:
+        logger.info("No need to update '%s' component of '%s'" %
+                    (data['name'], service.Title()))
+
     implementations_data = utils.getDataFromSPMT(
         data['service_component_implementations_link']['related']['href'])
     # print implementations_data
@@ -274,7 +312,7 @@ class SPMTSyncView(BrowserView):
             last_saved_data = getattr(service, '_last_saved_data', None)
 
             if last_saved_data == data:
-                logger.info("Nothing to be updated for %s in the 'catalog' folder" % id)
+                logger.info("Nothing to be update for %s in the 'catalog' folder" % id)
             else:
                 service.edit(**data)
                 service.reindexObject()
