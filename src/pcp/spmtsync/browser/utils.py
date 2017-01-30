@@ -36,13 +36,13 @@ def getDataFromSPMT(url):
         registry = getUtility(IRegistry)
         SPMT_BASE = registry['pcp.spmtsync.baseurl']
         url = url.replace('localhost', SPMT_BASE)
-    r = requests.get(url)
-    d = json.loads(r.content)
-    try:
-        return d['data']
-    except KeyError:
-        # TODO add logging
-        return None
+    result = requests.get(url)
+    if result.ok:
+        try:
+            return result.json()['data']
+        except KeyError:
+            # TODO add logging
+            return None
 
 
 def getServiceData():
@@ -50,7 +50,7 @@ def getServiceData():
     registry = getUtility(IRegistry)
     source_url = registry['pcp.spmtsync.portfoliourl']
     source = getDataFromSPMT(source_url)
-    if source is not None:
+    if source:
         return source['services']
     return None
 
