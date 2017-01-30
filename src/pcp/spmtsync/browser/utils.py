@@ -16,8 +16,10 @@ def getLogger(logfilename='var/log/spmtsync.log'):
     ch = logging.StreamHandler()
     ch.setLevel(logging.WARNING)
     # create formatter and add it to the handlers
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    console_formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_formatter = logging.Formatter(
+        '%(name)s - %(levelname)s - %(message)s')
     fh.setFormatter(file_formatter)
     ch.setFormatter(console_formatter)
     # add the handlers to the logger
@@ -26,13 +28,14 @@ def getLogger(logfilename='var/log/spmtsync.log'):
 
     return logger
 
+
 def getDataFromSPMT(url):
     """Returns the payload from url or None.
     Never fails."""
     if 'localhost' in url:
         registry = getUtility(IRegistry)
         SPMT_BASE = registry['pcp.spmtsync.baseurl']
-        url = url.replace('localhost', SPMT_BASE)  
+        url = url.replace('localhost', SPMT_BASE)
     r = requests.get(url)
     d = json.loads(r.content)
     try:
@@ -40,6 +43,7 @@ def getDataFromSPMT(url):
     except KeyError:
         # TODO add logging
         return None
+
 
 def getServiceData():
     """return a list of dictionaries with the service data"""
@@ -61,7 +65,7 @@ def email2puid(site):
     result = {}
     for person in site.people.contentValues():
         email = person.getEmail().lower()
-        uid =  person.UID()
+        uid = person.UID()
         if email and email in result.keys():
             logger.warning("'%s' already found - skipping" % email)
             continue
