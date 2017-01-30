@@ -1,5 +1,10 @@
+from zope.interface import alsoProvides
 from zope.component import getUtility
+
+import plone.api
+
 from plone.registry.interfaces import IRegistry
+from plone.protect.interfaces import IDisableCSRFProtection
 
 from Products.Five.browser import BrowserView
 from Products.PlonePAS.utils import cleanId
@@ -13,9 +18,7 @@ def preparedata(values, site, additional_org, email2puid, logger):
 
     logger.debug(values)
 
-    fields = {}
-    for k, v in values.items():
-        fields[k] = v
+    fields = values.copy()
 
     title = fields['name'].encode('utf8')
     scl = fields['service_complete_link']['related']['href']
@@ -213,9 +216,11 @@ class SPMTSyncView(BrowserView):
         """
         Main method to be called to sync content from SPMT
         """
+
+        alsoProvides(self.request, IDisableCSRFProtection)
+
         logger = utils.getLogger('var/log/spmtsync.log')
-        portal_url = getToolByName(self.context, "portal_url")
-        site = portal_url.getPortalObject()
+        site = plone.api.portal.get()
         targetfolder = self.context
         spmt_services = utils.getServiceData()
         email2puid = utils.email2puid(site)
@@ -230,7 +235,10 @@ class SPMTSyncView(BrowserView):
                 logger.warning("Couldn't generate id for ", values)
                 continue
             if id not in targetfolder.objectIds():
-                targetfolder.invokeFactory('Service', id)
+                plone.api.content.create(
+                        container=targetfolder,
+                        portal_type='Service',
+                        id=id)
                 logger.info("Added %s to the '%s' folder" %
                             (id, targetfolder.getId()))
 
@@ -238,11 +246,18 @@ class SPMTSyncView(BrowserView):
             additional = targetfolder[id].getAdditional()
             data = preparedata(entry, site, additional, email2puid, logger)
             logger.debug(data)
-            targetfolder[id].edit(**data)
-            targetfolder[id].reindexObject()
-            site.portal_repository.save(obj=targetfolder[id],
-                                        comment="Synchronization from SPMT")
-            logger.info("Updated %s in the 'catalog' folder" % id)
+
+            last_saved_data = getattr(targetfolder[id], '_last_saved_data', None)
+
+            if last_saved_data == data:
+                logger.info("Nothing to be updated for %s in the 'catalog' folder" % id)
+            else:
+                targetfolder[id].edit(**data)
+                targetfolder[id].reindexObject()
+                targetfolder[id]._last_saved_data = data
+                site.portal_repository.save(obj=targetfolder[id],
+                                            comment="Synchronization from SPMT")
+                logger.info("Updated %s in the 'catalog' folder" % id)
 
         # second loop so dependencies in 'details' can be resolved
         for entry in spmt_services:
@@ -256,3 +271,5 @@ class SPMTSyncView(BrowserView):
                 addDetails(site, targetfolder[id], data, logger)
             except IndexError:
                 pass
+
+        return 'DONE'
