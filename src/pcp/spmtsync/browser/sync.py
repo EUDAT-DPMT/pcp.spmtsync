@@ -14,6 +14,9 @@ from pcp.spmtsync.browser import utils
 from pcp.spmtsync.browser import config
 
 
+logger = utils.getLogger('var/log/spmtsync.log')
+
+
 def preparedata(values, site, additional_org, email2puid, logger):
 
     logger.debug(values)
@@ -89,15 +92,30 @@ def resolveDependencies(site, data):
     return data
 
 
+def update_object(obj, data):
+
+    portal_repo = plone.api.portal.get_tool('portal_repository')
+    last_saved_data = getattr(obj, '_last_saved_data', None)
+    if last_saved_data != data:
+        obj.edit(**data)
+        obj.reindexObject()
+        obj._last_saved_data = data
+        portal_repo.save(obj=obj, comment='Synchronization from SPMT')
+        logger.info(
+            "Updated {}/{} in the 'catalog' folder".format(obj.portal_type, obj.getId()))
+    else:
+        logger.debug('Up2date {}/{}'.format(obj.portal_type, obj.getId()))
+
+
 def addImplementationDetails(site, impl, data, logger):
     """Adding implementation details to a service component implementation"""
     logger.debug("addImplemenationDetails called with this data: '%s'" % data)
     id = cleanId('version-' + data['version'])
     if id not in impl.contentIds():
         details = plone.api.content.create(
-                portal_type='ServiceComponentImplementationDetails',
-                id=id,
-                container=impl)
+            portal_type='ServiceComponentImplementationDetails',
+            id=id,
+            container=impl)
         logger.info("Adding service component implementation details '%s' to '%s'" % (
             id, impl.Title()))
     else:
@@ -117,19 +135,8 @@ def addImplementationDetails(site, impl, data, logger):
     else:
         data['configuration_parameters'] = []
 
+    update_object(details, data)
 
-    last_saved_data = getattr(details, '_last_saved_data', None)
-    if last_saved_data != data:
-        details.edit(**data)
-        details.reindexObject()
-        details._last_saved_data = data
-        site.portal_repository.save(obj=details,
-                                    comment="Synchronization from SPMT")
-        logger.info("Updated '%s': implementation of '%s'" % (
-            data['title'], impl.Title()))
-    else:
-        logger.info("No need to update '%s': implementation of '%s'" % (
-            data['title'], impl.Title()))
 
 def addImplementation(site, component, data, logger):
     """Adding an implementation to a service component"""
@@ -137,9 +144,9 @@ def addImplementation(site, component, data, logger):
     id = cleanId(data['name'])
     if id not in component.contentIds():
         implementation = plone.api.content.create(
-                portal_type='ServiceComponentImplementation',
-                container=component,
-                id=id)
+            portal_type='ServiceComponentImplementation',
+            container=component,
+            id=id)
         logger.info("Adding service component implementation '%s' to '%s'" % (
             id, component.Title()))
     else:
@@ -150,19 +157,7 @@ def addImplementation(site, component, data, logger):
                             'value': data['uuid']},
                            ]
 
-    last_saved_data = getattr(implementation, '_last_saved_data', None)
-    if last_saved_data != data:
-        implementation.edit(**data)
-        implementation.reindexObject()
-        implementation.last_saved_data = data
-        site.portal_repository.save(obj=implementation,
-                                    comment="Synchronization from SPMT")
-        logger.info("Updated '%s': implementation of '%s'" % (
-            data['name'], component.Title()))
-    else:
-        logger.info("No need to update'%s': implementation of '%s'" % (
-            data['name'], component.Title()))
-
+    update_object(implementation, data)
 
     details_data = utils.getDataFromSPMT(
         data['component_implementation_details_link']['related']['href'])
@@ -181,9 +176,9 @@ def addComponent(service, site, data, logger):
     id = cleanId(data['name'])
     if id not in service.contentIds():
         component = plone.api.content.create(
-                container=service,
-                id=id,
-                portal_type='ServiceComponent')
+            container=service,
+            id=id,
+            portal_type='ServiceComponent')
         logger.info("Adding service component '%s' to '%s'" %
                     (id, service.Title()))
     else:
@@ -193,18 +188,7 @@ def addComponent(service, site, data, logger):
                             'value': data['uuid']},
                            ]
 
-    last_saved_data = getattr(component, '_last_saved_data', None)
-    if last_saved_data != data:
-        component.edit(**data)
-        component.reindexObject()
-        component._last_saved_data = data
-        site.portal_repository.save(obj=component,
-                                    comment="Synchronization from SPMT")
-        logger.info("Updated '%s' component of '%s'" %
-                    (data['name'], service.Title()))
-    else:
-        logger.info("No need to update '%s' component of '%s'" %
-                    (data['name'], service.Title()))
+    update_object(component, data)
 
     implementations_data = utils.getDataFromSPMT(
         data['service_component_implementations_link']['related']['href'])
@@ -223,9 +207,9 @@ def addDetails(site, parent, data, logger):
 
     if 'details' not in parent.objectIds():
         details = plone.api.content.create(
-                container=parent,
-                portal_type='Service Details',
-                id='details')
+            container=parent,
+            portal_type='Service Details',
+            id='details')
     else:
         details = parent.details
 
@@ -237,25 +221,15 @@ def addDetails(site, parent, data, logger):
                             'value': data['uuid']},
                            ]
 
-    last_saved_data = getattr(details, '_last_saved_data', None)
-    if data != last_saved_data:
-        details.edit(**data)
-        details.reindexObject()
-        details._last_saved_data = data
-        site.portal_repository.save(obj=details,
-                                    comment="Synchronization from SPMT")
-        logger.info("Updated 'details' of '%s'" % parent.getId())
-    else:
-        logger.info("No need to update 'details' of '%s'" % parent.getId())
+    update_object(details, data)
 
     # adding service components if any
     full_data = utils.getDataFromSPMT(data['links'])
     scl = full_data.get('service_components_list', None)
     if scl is None:
-        logger.info('No service components found for %s' % parent.Title())
+        logger.debug('No service components found for %s' % parent.Title())
         return None
     for sc in scl['service_components']:
-        logger.info('Adding service component to %s' % parent.Title())
         addComponent(parent, site, sc['component'], logger)
 
 
@@ -269,13 +243,12 @@ class SPMTSyncView(BrowserView):
 
         alsoProvides(self.request, IDisableCSRFProtection)
 
-        logger = utils.getLogger('var/log/spmtsync.log')
         site = plone.api.portal.get()
         target_folder = self.context
         spmt_services = utils.getServiceData()
         email2puid = utils.email2puid(site)
 
-        logger.info("Iterating over the service data")
+        logger.debug("Iterating over the service data")
 
         existing_services = set(target_folder.objectIds())
         current_spmt_services = set()
@@ -293,9 +266,9 @@ class SPMTSyncView(BrowserView):
 
             if id not in target_folder.objectIds():
                 plone.api.content.create(
-                        container=target_folder,
-                        portal_type='Service',
-                        id=id)
+                    container=target_folder,
+                    portal_type='Service',
+                    id=id)
                 logger.info("Added %s to the '%s' folder" %
                             (id, target_folder.getId()))
 
@@ -306,20 +279,7 @@ class SPMTSyncView(BrowserView):
             # retrieve data to extended rather than overwrite
             additional = service.getAdditional()
             data = preparedata(entry, site, additional, email2puid, logger)
-            logger.debug(data)
-
-            # keep a copy of the last saved data dict for comparison
-            last_saved_data = getattr(service, '_last_saved_data', None)
-
-            if last_saved_data == data:
-                logger.info("Nothing to be update for %s in the 'catalog' folder" % id)
-            else:
-                service.edit(**data)
-                service.reindexObject()
-                service._last_saved_data = data
-                site.portal_repository.save(obj=service,
-                                            comment="Synchronization from SPMT")
-                logger.info("Updated %s in the 'catalog' folder" % id)
+            update_object(service, data)
 
         # handle removed services: back to private state
         removed_services = existing_services - current_spmt_services
