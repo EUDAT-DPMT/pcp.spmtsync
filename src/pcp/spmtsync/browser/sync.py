@@ -182,10 +182,15 @@ def addComponent(service, site, data, logger):
 
 def addDetails(site, parent, data, logger):
     """Adding service details"""
-    if not 'details' in parent.objectIds():
-        parent.invokeFactory('Service Details', 'details')
-        logger.info("Adding 'details' to '%s'" % parent.getId())
-    details = parent.details
+
+    if 'details' not in parent.objectIds():
+        details = plone.api.content.create(
+                container=parent,
+                portal_type='Service Details',
+                id='details')
+    else:
+        details = parent.details
+
     data['title'] = 'Service Details'
     data['description'] = 'Details of the %s service' % parent.Title()
     data = flattenlinks(data)
@@ -193,11 +198,18 @@ def addDetails(site, parent, data, logger):
     data['identifiers'] = [{'type': 'spmt_uid',
                             'value': data['uuid']},
                            ]
-    details.edit(**data)
-    details.reindexObject()
-    site.portal_repository.save(obj=details,
-                                comment="Synchronization from SPMT")
-    logger.info("Updated 'details' of '%s'" % parent.getId())
+
+    last_saved_data = getattr(details, '_last_saved_data', None)
+    if data != last_saved_data:
+        details.edit(**data)
+        details.reindexObject()
+        details._last_saved_data = data
+        site.portal_repository.save(obj=details,
+                                    comment="Synchronization from SPMT")
+        logger.info("Updated 'details' of '%s'" % parent.getId())
+    else:
+        logger.info("No need to update 'details' of '%s'" % parent.getId())
+
     # adding service components if any
     full_data = utils.getDataFromSPMT(data['links'])
     scl = full_data.get('service_components_list', None)
@@ -221,11 +233,15 @@ class SPMTSyncView(BrowserView):
 
         logger = utils.getLogger('var/log/spmtsync.log')
         site = plone.api.portal.get()
-        targetfolder = self.context
+        target_folder = self.context
         spmt_services = utils.getServiceData()
         email2puid = utils.email2puid(site)
 
         logger.info("Iterating over the service data")
+
+        existing_services = set(target_folder.objectIds())
+        current_spmt_services = set()
+
         for entry in spmt_services:
             shortname = entry['name']
             id = cleanId(shortname)
@@ -234,30 +250,45 @@ class SPMTSyncView(BrowserView):
             if id is None:
                 logger.warning("Couldn't generate id for ", values)
                 continue
-            if id not in targetfolder.objectIds():
+
+            current_spmt_services.add(id)
+
+            if id not in target_folder.objectIds():
                 plone.api.content.create(
-                        container=targetfolder,
+                        container=target_folder,
                         portal_type='Service',
                         id=id)
                 logger.info("Added %s to the '%s' folder" %
-                            (id, targetfolder.getId()))
+                            (id, target_folder.getId()))
+
+            service = target_folder[id]
+            if plone.api.content.get_state(service) != 'internal':
+                plone.api.content.transition(obj=service, state='internal')
 
             # retrieve data to extended rather than overwrite
-            additional = targetfolder[id].getAdditional()
+            additional = service.getAdditional()
             data = preparedata(entry, site, additional, email2puid, logger)
             logger.debug(data)
 
-            last_saved_data = getattr(targetfolder[id], '_last_saved_data', None)
+            # keep a copy of the last saved data dict for comparison
+            last_saved_data = getattr(service, '_last_saved_data', None)
 
             if last_saved_data == data:
                 logger.info("Nothing to be updated for %s in the 'catalog' folder" % id)
             else:
-                targetfolder[id].edit(**data)
-                targetfolder[id].reindexObject()
-                targetfolder[id]._last_saved_data = data
-                site.portal_repository.save(obj=targetfolder[id],
+                service.edit(**data)
+                service.reindexObject()
+                service._last_saved_data = data
+                site.portal_repository.save(obj=service,
                                             comment="Synchronization from SPMT")
                 logger.info("Updated %s in the 'catalog' folder" % id)
+
+        # handle removed services: back to private state
+        removed_services = existing_services - current_spmt_services
+        for id in removed_services:
+            service = target_folder[id]
+            if plone.api.content.get_state(service) != 'private':
+                plone.api.content.transition(obj=service, state='private')
 
         # second loop so dependencies in 'details' can be resolved
         for entry in spmt_services:
@@ -266,9 +297,10 @@ class SPMTSyncView(BrowserView):
             if id == 'test':
                 continue
             try:
+                service = target_folder[id]
                 data = entry['service_details_list']['service_details'][0]
                 # we assume there is at most one
-                addDetails(site, targetfolder[id], data, logger)
+                addDetails(site, service, data, logger)
             except IndexError:
                 pass
 
