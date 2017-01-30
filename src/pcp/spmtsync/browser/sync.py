@@ -93,6 +93,11 @@ def resolveDependencies(site, data):
 
 
 def update_object(obj, data):
+    """ Update `obj` with data dict using Archetypes edit() method.
+        We preserve the original `data` dictionary in order to check
+        during later updates for changed data in order to avoid
+        unneccessary copy of the same object in portal_repository.
+    """
 
     portal_repo = plone.api.portal.get_tool('portal_repository')
     last_saved_data = getattr(obj, '_last_saved_data', None)
@@ -107,19 +112,28 @@ def update_object(obj, data):
         logger.debug('Up2date {}/{}'.format(obj.portal_type, obj.getId()))
 
 
+def check_and_create_object(container, portal_type, obj_id):
+    """ Check if `container` contains an object with ID `obj_id`.
+        If not, create it and return it.
+    """
+    if obj_id not in container.objectIds():
+        obj = plone.api.content.create(
+            type=portal_type,
+            container=container,
+            id=obj_id)
+        logger.info('Adding {}/{} to "{}/{}/{}"'.format(portal_type, obj_id, container.portal_type, container.absolute_url(1), container.Title()))
+
+    obj = container[obj_id]
+    if plone.api.content.get_state(obj) != 'internal':
+        plone.api.content.transition(obj=obj, to_state='internal')
+        obj.reindexObject()
+    return obj
+
 def addImplementationDetails(site, impl, data, logger):
     """Adding implementation details to a service component implementation"""
     logger.debug("addImplemenationDetails called with this data: '%s'" % data)
     id = cleanId('version-' + data['version'])
-    if id not in impl.contentIds():
-        details = plone.api.content.create(
-            portal_type='ServiceComponentImplementationDetails',
-            id=id,
-            container=impl)
-        logger.info("Adding service component implementation details '%s' to '%s'" % (
-            id, impl.Title()))
-    else:
-        details = impl[id]
+    details = check_and_create_object(impl, 'ServiceComponentImplementationDetails', id)
 
     data['title'] = 'Version ' + data['version']
     data['description'] = 'Implementation details of ' + \
@@ -142,15 +156,7 @@ def addImplementation(site, component, data, logger):
     """Adding an implementation to a service component"""
     logger.debug("addImplemenation called with this data: '%s'" % data)
     id = cleanId(data['name'])
-    if id not in component.contentIds():
-        implementation = plone.api.content.create(
-            portal_type='ServiceComponentImplementation',
-            container=component,
-            id=id)
-        logger.info("Adding service component implementation '%s' to '%s'" % (
-            id, component.Title()))
-    else:
-        implementation = component[id]
+    implementation = check_and_create_object(component, 'ServiceComponentImplementation', id)
 
     data['title'] = component.Title() + ' implementation: ' + data['name']
     data['identifiers'] = [{'type': 'spmt_uid',
@@ -174,15 +180,8 @@ def addComponent(service, site, data, logger):
     """Adding a service component to 'service' described by 'data'"""
     logger.debug("addComponent called with this data: '%s'" % data)
     id = cleanId(data['name'])
-    if id not in service.contentIds():
-        component = plone.api.content.create(
-            container=service,
-            id=id,
-            portal_type='ServiceComponent')
-        logger.info("Adding service component '%s' to '%s'" %
-                    (id, service.Title()))
-    else:
-        component = service[id]
+    component = check_and_create_object(service, 'ServiceComponent', id)
+
     data['title'] = "Service component '%s'" % data['name']
     data['identifiers'] = [{'type': 'spmt_uid',
                             'value': data['uuid']},
@@ -205,13 +204,7 @@ def addComponent(service, site, data, logger):
 def addDetails(site, parent, data, logger):
     """Adding service details"""
 
-    if 'details' not in parent.objectIds():
-        details = plone.api.content.create(
-            container=parent,
-            portal_type='Service Details',
-            id='details')
-    else:
-        details = parent.details
+    details = check_and_create_object(parent, 'Service Details', 'details')
 
     data['title'] = 'Service Details'
     data['description'] = 'Details of the %s service' % parent.Title()
@@ -264,17 +257,7 @@ class SPMTSyncView(BrowserView):
 
             current_spmt_services.add(id)
 
-            if id not in target_folder.objectIds():
-                plone.api.content.create(
-                    container=target_folder,
-                    portal_type='Service',
-                    id=id)
-                logger.info("Added %s to the '%s' folder" %
-                            (id, target_folder.getId()))
-
-            service = target_folder[id]
-            if plone.api.content.get_state(service) != 'internal':
-                plone.api.content.transition(obj=service, state='internal')
+            service = check_and_create_object(target_folder, 'Service', id)
 
             # retrieve data to extended rather than overwrite
             additional = service.getAdditional()
@@ -286,7 +269,7 @@ class SPMTSyncView(BrowserView):
         for id in removed_services:
             service = target_folder[id]
             if plone.api.content.get_state(service) != 'private':
-                plone.api.content.transition(obj=service, state='private')
+                plone.api.content.transition(obj=service, to_state='private')
 
         # second loop so dependencies in 'details' can be resolved
         for entry in spmt_services:
