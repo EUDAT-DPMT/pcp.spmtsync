@@ -17,7 +17,7 @@ from pcp.spmtsync.browser import config
 logger = utils.getLogger('var/log/spmtsync.log')
 
 
-def prepare_data(values, site, additional_org, email2puid, logger):
+def prepare_data(values, additional_org, email2puid, logger):
 
     logger.debug(values)
 
@@ -75,10 +75,13 @@ def flatten_links(data):
     return data
 
 
-def resolveDependencies(site, data):
+def resolveDependencies(data):
     """Resolve dependencies by looking up the UIDs of the respective
     services. It is assumed that the services are there and can be
     looked up by name in the 'catalog' folder."""
+
+    site = plone.api.portal.get()
+    catalog = site.catalog     # wahh....hard-coded
     deps = data['dependencies_list']['services']
     if not deps:
         data['dependencies'] = []
@@ -86,7 +89,7 @@ def resolveDependencies(site, data):
         dependencies = []
         for dep in deps:
             name = dep['service']['name']
-            uid = site['catalog'][cleanId(name)].UID()
+            uid = catalog[cleanId(name)].UID()
             dependencies.append(uid)
         data['dependencies'] = dependencies
     return data
@@ -129,7 +132,7 @@ def check_and_create_object(container, portal_type, obj_id):
         obj.reindexObject()
     return obj
 
-def addImplementationDetails(site, impl, data, logger):
+def addImplementationDetails(impl, data, logger):
     """Adding implementation details to a service component implementation"""
     logger.debug("addImplemenationDetails called with this data: '%s'" % data)
     id = cleanId('version-' + data['version'])
@@ -152,7 +155,7 @@ def addImplementationDetails(site, impl, data, logger):
     update_object(details, data)
 
 
-def addImplementation(site, component, data, logger):
+def addImplementation(component, data, logger):
     """Adding an implementation to a service component"""
     logger.debug("addImplemenation called with this data: '%s'" % data)
     id = cleanId(data['name'])
@@ -172,11 +175,13 @@ def addImplementation(site, component, data, logger):
     if not details:
         logger.info("No implemenation details found for '%s'" % data['title'])
         return
+
+
     for detail in details:
-        addImplementationDetails(site, implementation, detail, logger)
+        addImplementationDetails(implementation, detail, logger)
 
 
-def addComponent(service, site, data, logger):
+def addComponent(service, data, logger):
     """Adding a service component to 'service' described by 'data'"""
     logger.debug("addComponent called with this data: '%s'" % data)
     id = cleanId(data['name'])
@@ -198,10 +203,10 @@ def addComponent(service, site, data, logger):
         logger.info("No implemenations found for '%s'" % data['title'])
         return
     for implementation in implementations:
-        addImplementation(site, component, implementation, logger)
+        addImplementation(component, implementation, logger)
 
 
-def addDetails(site, parent, data, logger):
+def addDetails(parent, data, logger):
     """Adding service details"""
 
     details = check_and_create_object(parent, 'Service Details', 'details')
@@ -209,7 +214,7 @@ def addDetails(site, parent, data, logger):
     data['title'] = 'Service Details'
     data['description'] = 'Details of the %s service' % parent.Title()
     data = flatten_links(data)
-    data = resolveDependencies(site, data)
+    data = resolveDependencies(data)
     data['identifiers'] = [{'type': 'spmt_uid',
                             'value': data['uuid']},
                            ]
@@ -223,7 +228,7 @@ def addDetails(site, parent, data, logger):
         logger.debug('No service components found for %s' % parent.Title())
         return None
     for sc in scl['service_components']:
-        addComponent(parent, site, sc['component'], logger)
+        addComponent(parent, sc['component'], logger)
 
 
 class SPMTSyncView(BrowserView):
@@ -261,7 +266,7 @@ class SPMTSyncView(BrowserView):
 
             # retrieve data to extended rather than overwrite
             additional = service.getAdditional()
-            data = prepare_data(entry, site, additional, email2puid, logger)
+            data = prepare_data(entry, additional, email2puid, logger)
             update_object(service, data)
 
         # handle removed services: back to private state
@@ -281,7 +286,7 @@ class SPMTSyncView(BrowserView):
                 service = target_folder[id]
                 data = entry['service_details_list']['service_details'][0]
                 # we assume there is at most one
-                addDetails(site, service, data, logger)
+                addDetails(service, data, logger)
             except IndexError:
                 pass
 
