@@ -17,7 +17,7 @@ from pcp.spmtsync.browser import config
 logger = utils.getLogger('var/log/spmtsync.log')
 
 
-def preparedata(values, site, additional_org, email2puid, logger):
+def prepare_data(values, site, additional_org, email2puid, logger):
 
     logger.debug(values)
 
@@ -65,7 +65,7 @@ def preparedata(values, site, additional_org, email2puid, logger):
     return fields.copy()
 
 
-def flattenlinks(data):
+def flatten_links(data):
     """Unpack and inline the embedded links"""
     for field in config.link_fields:
         link = data[field]['related']['href']
@@ -208,7 +208,7 @@ def addDetails(site, parent, data, logger):
 
     data['title'] = 'Service Details'
     data['description'] = 'Details of the %s service' % parent.Title()
-    data = flattenlinks(data)
+    data = flatten_links(data)
     data = resolveDependencies(site, data)
     data['identifiers'] = [{'type': 'spmt_uid',
                             'value': data['uuid']},
@@ -261,7 +261,7 @@ class SPMTSyncView(BrowserView):
 
             # retrieve data to extended rather than overwrite
             additional = service.getAdditional()
-            data = preparedata(entry, site, additional, email2puid, logger)
+            data = prepare_data(entry, site, additional, email2puid, logger)
             update_object(service, data)
 
         # handle removed services: back to private state
