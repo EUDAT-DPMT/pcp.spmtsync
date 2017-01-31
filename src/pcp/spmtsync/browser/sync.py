@@ -1,3 +1,5 @@
+import deep
+
 from zope.interface import alsoProvides
 from zope.component import getUtility
 
@@ -105,6 +107,9 @@ def update_object(obj, data):
     portal_repo = plone.api.portal.get_tool('portal_repository')
     last_saved_data = getattr(obj, '_last_saved_data', None)
     if last_saved_data != data:
+        diff = deep.diff(last_saved_data, data)
+        if diff:
+            logger.info('Diff: {}'.format(diff.print_full()))
         obj.edit(**data)
         obj.reindexObject()
         obj._last_saved_data = data
@@ -245,6 +250,10 @@ class SPMTSyncView(BrowserView):
         target_folder = self.context
         spmt_services = utils.getServiceData()
         email2puid = utils.email2puid(site)
+
+        if force:
+            logger.debug('Fresh import - removing all existing entries (force=True)')
+            plone.api.content.delete(objects=self.context.contentValues())
 
         logger.debug("Iterating over the service data")
 

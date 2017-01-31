@@ -7,9 +7,6 @@ pcp.spmtsync
 Keep content in sync with SPMT
 """
 
-# FIXME: Please read http://pythonhosted.org/setuptools/setuptools.html to
-#        customize in depth your setup script
-
 from setuptools import setup, find_packages
 import os, sys
 
@@ -48,9 +45,8 @@ setup(name='pcp.spmtsync',
       include_package_data=True,
       zip_safe=False,
       install_requires=[
-          # 3rd party
           'setuptools'
-          # Others
+          'deep',
           ],
       entry_points={
           },
