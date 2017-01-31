@@ -124,16 +124,21 @@ def update_object(obj, data):
         unneccessary copy of the same object in portal_repository.
     """
 
-    portal_repo = plone.api.portal.get_tool('portal_repository')
     last_saved_data = getattr(obj, '_last_saved_data', None)
+
     if last_saved_data != data:
+
         diff = deep.diff(last_saved_data, data)
         if diff:
             logger.info('Diff: {}'.format(diff.print_full()))
+
         obj.edit(**data)
         obj.reindexObject()
         obj._last_saved_data = data
+
+        portal_repo = plone.api.portal.get_tool('portal_repository')
         portal_repo.save(obj=obj, comment='Synchronization from SPMT')
+
         logger.info(
             "Updated {}/{} in the 'catalog' folder".format(obj.portal_type, obj.getId()))
     else:
