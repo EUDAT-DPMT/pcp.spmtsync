@@ -5,12 +5,14 @@
 
   <!--browser view registrations go here-->
 
+  <include package="Products.CMFCore"/>
+
   <browser:page
 	for="pcp.spmtsync.interfaces.IPortfolioRoot"
 	name="sync"
 	class="pcp.spmtsync.browser.sync.SPMTSyncView"
 	attribute="sync"
-	permission="zope2.View"
+	permission="cmf.ModifyPortalContent"
         />
 
 </configure>
