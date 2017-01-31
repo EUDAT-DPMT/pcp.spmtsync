@@ -19,6 +19,26 @@ from pcp.spmtsync.browser import config
 logger = utils.getLogger('var/log/spmtsync.log')
 
 
+class StateHandler(object):
+
+    def __init__(self, folder):
+        self.folder = folder
+        self.ids = set(folder.objectIds())
+        self.touched_ids = set()
+
+    def add(self, id):
+        self.touched_ids.add(id)
+
+    def fix_states(self):
+
+        removed_ids = self.ids - self.touched_ids
+        for id in removed_ids:
+            obj = self.folder[id]
+            if plone.api.content.get_state(obj) != 'private':
+                plone.api.content.transition(obj=obj, to_state='private')
+                obj.reindexObject()
+
+
 def prepare_data(values, additional_org, email2puid, logger):
 
     logger.debug(values)
@@ -257,9 +277,7 @@ class SPMTSyncView(BrowserView):
 
         logger.debug("Iterating over the service data")
 
-        existing_services = set(target_folder.objectIds())
-        current_spmt_services = set()
-
+        state_handler = StateHandler(target_folder)
         for entry in spmt_services:
             shortname = entry['name']
             id = cleanId(shortname)
@@ -269,7 +287,7 @@ class SPMTSyncView(BrowserView):
                 logger.warning("Couldn't generate id for ", values)
                 continue
 
-            current_spmt_services.add(id)
+            state_handler.add(id)
 
             service = check_and_create_object(target_folder, 'Service', id)
 
@@ -277,15 +295,11 @@ class SPMTSyncView(BrowserView):
             additional = service.getAdditional()
             data = prepare_data(entry, additional, email2puid, logger)
             update_object(service, data)
+        state_handler.fix_states()
 
-        # handle removed services: back to private state
-        removed_services = existing_services - current_spmt_services
-        for id in removed_services:
-            service = target_folder[id]
-            if plone.api.content.get_state(service) != 'private':
-                plone.api.content.transition(obj=service, to_state='private')
 
         # second loop so dependencies in 'details' can be resolved
+
         for entry in spmt_services:
             shortname = entry['name']
             id = cleanId(shortname)
