@@ -45,7 +45,7 @@ setup(name='pcp.spmtsync',
       include_package_data=True,
       zip_safe=False,
       install_requires=[
-          'setuptools'
+          'setuptools',
           'deep',
           ],
       entry_points={
