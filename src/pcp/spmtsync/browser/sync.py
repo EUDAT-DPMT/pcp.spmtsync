@@ -260,7 +260,7 @@ class SPMTSyncView(BrowserView):
         spmt_services = utils.getServiceData()
         email2puid = utils.email2puid(site)
 
-        # preserve old state
+        # collect all subobjects
         catalog = plone.api.portal.get_tool('portal_catalog')
         for brain in catalog(path='/'.join(target_folder.getPhysicalPath())):
             self._objs_original.add(brain.getPath())
@@ -304,6 +304,8 @@ class SPMTSyncView(BrowserView):
             except IndexError:
                 pass
 
+        # compared touch objects against old obj state and
+        # make untouched objects (outdated) private
         untouched_objs = self._objs_original - self._objs_touched
         for path in untouched_objs:
             obj = self.context.restrictedTraverse(path)
