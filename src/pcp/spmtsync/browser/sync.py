@@ -18,8 +18,14 @@ from pcp.spmtsync.browser import config
 
 logger = utils.getLogger('var/log/spmtsync.log')
 
+
 class SPMTSyncView(BrowserView):
     """Enable import of services from SPMT"""
+
+    def __init__(self, context, request):
+        super(SPMTSyncView, self).__init__(context, request)
+        self._objs_original = set()
+        self._objs_touched = set()
 
     def prepare_data(self, values, additional_org, email2puid, logger):
 
@@ -47,7 +53,8 @@ class SPMTSyncView(BrowserView):
             contact_url = fields['contact_information']['links']['self']
             # first map exceptions
             contact_data = utils.getDataFromSPMT(contact_url)
-            contact_email = contact_data['external_contact_information']['email']
+            contact_email = contact_data[
+                'external_contact_information']['email']
             email = config.creg2dp_email.get(contact_email, contact_email)
             # then look up corresponding UID
             contact_uid = email2puid.get(email, None)
@@ -68,7 +75,6 @@ class SPMTSyncView(BrowserView):
 
         return fields.copy()
 
-
     def flatten_links(self, data):
         """Unpack and inline the embedded links"""
         for field in config.link_fields:
@@ -77,7 +83,6 @@ class SPMTSyncView(BrowserView):
         details_link = data['links']['self']
         data['links'] = details_link
         return data
-
 
     def resolveDependencies(self, data):
         """Resolve dependencies by looking up the UIDs of the respective
@@ -97,7 +102,6 @@ class SPMTSyncView(BrowserView):
                 dependencies.append(uid)
             data['dependencies'] = dependencies
         return data
-
 
     def update_object(self, obj, data):
         """ Update `obj` with data dict using Archetypes edit() method.
@@ -126,7 +130,6 @@ class SPMTSyncView(BrowserView):
         else:
             logger.debug('Up2date {}/{}'.format(obj.portal_type, obj.getId()))
 
-
     def check_and_create_object(self, container, portal_type, obj_id):
         """ Check if `container` contains an object with ID `obj_id`.
             If not, create it and return it.
@@ -136,9 +139,13 @@ class SPMTSyncView(BrowserView):
                 type=portal_type,
                 container=container,
                 id=obj_id)
-            logger.info('Adding {}/{} to "{}/{}/{}"'.format(portal_type, obj_id, container.portal_type, container.absolute_url(1), container.Title()))
+            logger.info('Adding {}/{} to "{}/{}/{}"'.format(portal_type, obj_id,
+                                                            container.portal_type, container.absolute_url(1), container.Title()))
 
         obj = container[obj_id]
+
+        self._objs_touched.add('/'.join(obj.getPhysicalPath()))
+
         if plone.api.content.get_state(obj) != 'internal':
             plone.api.content.transition(obj=obj, to_state='internal')
             obj.reindexObject()
@@ -146,9 +153,11 @@ class SPMTSyncView(BrowserView):
 
     def addImplementationDetails(self, impl, data, logger):
         """Adding implementation details to a service component implementation"""
-        logger.debug("addImplemenationDetails called with this data: '%s'" % data)
+        logger.debug(
+            "addImplemenationDetails called with this data: '%s'" % data)
         id = cleanId('version-' + data['version'])
-        details = self.check_and_create_object(impl, 'ServiceComponentImplementationDetails', id)
+        details = self.check_and_create_object(
+            impl, 'ServiceComponentImplementationDetails', id)
 
         data['title'] = 'Version ' + data['version']
         data['description'] = 'Implementation details of ' + \
@@ -166,12 +175,12 @@ class SPMTSyncView(BrowserView):
 
         self.update_object(details, data)
 
-
     def addImplementation(self, component, data, logger):
         """Adding an implementation to a service component"""
         logger.debug("addImplemenation called with this data: '%s'" % data)
         id = cleanId(data['name'])
-        implementation = self.check_and_create_object(component, 'ServiceComponentImplementation', id)
+        implementation = self.check_and_create_object(
+            component, 'ServiceComponentImplementation', id)
 
         data['title'] = component.Title() + ' implementation: ' + data['name']
         data['identifiers'] = [{'type': 'spmt_uid',
@@ -185,17 +194,18 @@ class SPMTSyncView(BrowserView):
         details = details_data['service_component_implementation_details_list'][
             'service_component_implementation_details']
         if not details:
-            logger.info("No implemenation details found for '%s'" % data['title'])
+            logger.info("No implemenation details found for '%s'" %
+                        data['title'])
             return
         for detail in details:
             self.addImplementationDetails(implementation, detail, logger)
-
 
     def addComponent(self, service, data, logger):
         """Adding a service component to 'service' described by 'data'"""
         logger.debug("addComponent called with this data: '%s'" % data)
         id = cleanId(data['name'])
-        component = self.check_and_create_object(service, 'ServiceComponent', id)
+        component = self.check_and_create_object(
+            service, 'ServiceComponent', id)
 
         data['title'] = "Service component '%s'" % data['name']
         data['identifiers'] = [{'type': 'spmt_uid',
@@ -215,15 +225,12 @@ class SPMTSyncView(BrowserView):
         for implementation in implementations:
             self.addImplementation(component, implementation, logger)
 
-
     def addDetails(self, parent, data, logger):
         """Adding service details"""
 
-        details = self.check_and_create_object(parent, 'Service Details', 'details')
+        details = self.check_and_create_object(
+            parent, 'Service Details', 'details')
 
-        # dead code !?
-        data['title'] = 'Service Details'
-        data['description'] = 'Details of the %s service' % parent.Title()
         data = self.flatten_links(data)
         data = self.resolveDependencies(data)
         data['identifiers'] = [{'type': 'spmt_uid',
@@ -241,7 +248,6 @@ class SPMTSyncView(BrowserView):
         for sc in scl['service_components']:
             self.addComponent(parent, sc['component'], logger)
 
-
     def sync(self, force=False):
         """
         Main method to be called to sync content from SPMT
@@ -254,8 +260,14 @@ class SPMTSyncView(BrowserView):
         spmt_services = utils.getServiceData()
         email2puid = utils.email2puid(site)
 
+        # preserve old state
+        catalog = plone.api.portal.get_tool('portal_catalog')
+        for brain in catalog(path='/'.join(target_folder.getPhysicalPath())):
+            self._objs_original.add(brain.getPath())
+
         if force:
-            logger.debug('Fresh import - removing all existing entries (force=True)')
+            logger.debug(
+                'Fresh import - removing all existing entries (force=True)')
             plone.api.content.delete(objects=self.context.contentValues())
 
         logger.debug("Iterating over the service data")
@@ -269,13 +281,13 @@ class SPMTSyncView(BrowserView):
                 logger.warning("Couldn't generate id for ", values)
                 continue
 
-            service = self.check_and_create_object(target_folder, 'Service', id)
+            service = self.check_and_create_object(
+                target_folder, 'Service', id)
 
             # retrieve data to extended rather than overwrite
             additional = service.getAdditional()
             data = self.prepare_data(entry, additional, email2puid, logger)
             self.update_object(service, data)
-
 
         # second loop so dependencies in 'details' can be resolved
 
@@ -291,5 +303,13 @@ class SPMTSyncView(BrowserView):
                 self.addDetails(service, data, logger)
             except IndexError:
                 pass
+
+        untouched_objs = self._objs_original - self._objs_touched
+        for path in untouched_objs:
+            obj = self.context.restrictedTraverse(path)
+            if obj != target_folder:
+                state = plone.api.content.get_state(obj=obj)
+                if state != 'private':
+                    plone.api.content.transition(obj=obj, to_state='private')
 
         return 'DONE'

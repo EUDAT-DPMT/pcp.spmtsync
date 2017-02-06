@@ -35,7 +35,7 @@ def getDataFromSPMT(url):
     if 'localhost' in url:
         registry = getUtility(IRegistry)
         SPMT_BASE = registry['pcp.spmtsync.baseurl']
-        url = url.replace('localhost', SPMT_BASE)
+
     result = requests.get(url)
     if result.ok:
         try:
