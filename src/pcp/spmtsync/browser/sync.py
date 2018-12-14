@@ -154,8 +154,8 @@ class SPMTSyncView(BrowserView):
 
         self._objs_touched.add('/'.join(obj.getPhysicalPath()))
 
-        if plone.api.content.get_state(obj) != 'internal':
-            plone.api.content.transition(obj=obj, to_state='internal')
+        if plone.api.content.get_state(obj) != 'internally_published':
+            plone.api.content.transition(obj=obj, to_state='internally_published')
             obj.reindexObject()
         return obj
 
