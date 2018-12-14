@@ -93,10 +93,9 @@ class SPMTSyncView(BrowserView):
     def resolveDependencies(self, data):
         """Resolve dependencies by looking up the UIDs of the respective
         services. It is assumed that the services are there and can be
-        looked up by name in the 'catalog' folder."""
+        looked up by name in the target folder."""
 
         site = plone.api.portal.get()
-        catalog = site.catalog     # wahh....hard-coded
         deps = data['dependencies_list']['services']
         if not deps:
             data['dependencies'] = []
@@ -104,8 +103,11 @@ class SPMTSyncView(BrowserView):
             dependencies = []
             for dep in deps:
                 name = dep['service']['name']
-                uid = catalog[cleanId(name)].UID()
-                dependencies.append(uid)
+                try:
+                    uid = self.context[cleanId(name)].UID()
+                    dependencies.append(uid)
+                except KeyError:  # can happen on first pass
+                    pass
             data['dependencies'] = dependencies
         return data
 
@@ -222,7 +224,10 @@ class SPMTSyncView(BrowserView):
 
         implementations_data = utils.getDataFromSPMT(
             data['service_component_implementations_link']['related']['href'])
-        # print implementations_data
+        # print "#############\n", implementations_data
+        if not implementations_data:
+            logger.info("No implemenations_data found for '%s'" % data['title'])
+            return
         implementations = implementations_data[
             'service_component_implementations_list']['service_component_implementations']
         if not implementations:
