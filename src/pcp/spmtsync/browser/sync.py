@@ -53,8 +53,11 @@ class SPMTSyncView(BrowserView):
             contact_url = fields['contact_information']['links']['self']
             # first map exceptions
             contact_data = utils.getDataFromSPMT(contact_url)
-            contact_email = contact_data[
-                'external_contact_information']['email']
+            try:
+                contact_email = contact_data[
+                    'external_contact_information']['email']
+            except TypeError:
+                contact_email = 'noreply@nowhere.org'
             email = config.creg2dp_email.get(contact_email, contact_email)
             # then look up corresponding UID
             contact_uid = email2puid.get(email, None)
@@ -64,7 +67,10 @@ class SPMTSyncView(BrowserView):
             else:
                 fields['contact'] = contact_uid
         # same for the service owner
-        owner_email = fields['service_owner']['email']
+        try:
+            owner_email = fields['service_owner']['email']
+        except TypeError:
+            owner_email = "noreply@nowhere.org"
         o_email = config.creg2dp_email.get(owner_email, owner_email)
         owner_uid = email2puid.get(o_email, None)
         if owner_uid is None:
