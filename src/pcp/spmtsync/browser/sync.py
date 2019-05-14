@@ -317,8 +317,12 @@ class SPMTSyncView(BrowserView):
 
         # compared touch objects against old obj state and
         # make untouched objects (outdated) private
+        # RR (2019-05-14): why did we introduce this?
         untouched_objs = self._objs_original - self._objs_touched
         for path in untouched_objs:
+            # options are defined in DPMT not SPMT
+            if 'options' in path:
+                continue
             obj = self.context.restrictedTraverse(path)
             if obj != target_folder:
                 state = plone.api.content.get_state(obj=obj)
