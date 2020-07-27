@@ -1,4 +1,5 @@
-import deep
+# TODO: replace with https://pypi.org/project/deepdiff ?
+# import deep
 
 from zope.interface import alsoProvides
 from zope.component import getUtility
@@ -122,7 +123,8 @@ class SPMTSyncView(BrowserView):
 
         if last_saved_data != data:
 
-            diff = deep.diff(last_saved_data, data)
+
+           # TODO: replace with https://pypi.org/project/deepdiff ? diff = deep.diff(last_saved_data, data)
             if diff:
                 logger.info('Diff: {}'.format(diff.print_full()))
 

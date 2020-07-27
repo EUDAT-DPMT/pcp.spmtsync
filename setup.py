@@ -46,7 +46,7 @@ setup(name='pcp.spmtsync',
       zip_safe=False,
       install_requires=[
           'setuptools',
-          'deep',
+          # TODO: Replace with https://pypi.org/project/deepdiff ?
           ],
       entry_points={
           },
